@@ -1,0 +1,375 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'OpenSwan Cluster on AWS'
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+            default: OpenSwan VPC Setting
+        Parameters:
+          - CustomIdentifier
+          - AvailabilityZones
+          - VPCCIDR
+          - LocalSubnet
+          - OpenSwanMasterSubnetCIDR
+          - OpenSwanSlaveSubnetCIDR
+          - PrivateSubnet1CIDR
+          - PrivateSubnet2CIDR
+          
+      - Label:
+            default: IPSecVPN  EC2 Setting
+        Parameters:
+          - OpenSwanInstanceType
+          - KeypairName
+          - OpenSwanMasterPrivateIP
+          - SNSEmail
+      - Label:
+            default: IPSec Phase I Setting
+        Parameters:
+          - IPSecIKE
+          - IPSecIKEmodp
+          - IPSecIKELifeTime
+          - IPSecSharedSecret
+      
+      - Label:
+           default: IPSecVPN Phase II Setting
+        Parameters:
+          - IPSecPhaseII
+          - IPSecPhaseIIAlg
+          - IPSECPhaseIImodp
+          - IPSECSALifeTime
+
+      - Label:
+            default: Remote Data center setting
+        Parameters:
+          - RemoteDataCenterSubnet
+          - RemoteDataCenterServerIP
+
+Parameters:
+    CustomIdentifier:
+        Description: AWS Resource CustomIdentifier
+        Type: String
+        Default: OpenSwan
+    VPCCIDR:
+      Type: String
+      Default: 10.100.0.0/16
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The CIDR block for the VPC.
+    
+    AvailabilityZones:
+      Description: >-
+        The list of Availability Zones to use for the subnets in the VPC. The
+        Quick Start uses two Availability Zones from your list and preserves the
+        logical order you specify.
+      Type: 'List<AWS::EC2::AvailabilityZone::Name>'
+
+    OpenSwanMasterSubnetCIDR:
+      Type: String
+      Default: 10.100.0.0/24
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The CIDR block for the public subnet for OpenSwanMaster located in Availability Zone A.
+
+    OpenSwanSlaveSubnetCIDR:
+      Type: String
+      Default: 10.100.1.0/24
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The CIDR block for the public  subnet for OpenSwanSlave located in Availability Zone B.
+    
+    PrivateSubnet1CIDR:
+      Type: String
+      Default: 10.100.2.0/24
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The CIDR block for the private  subnet located in Availability Zone 1.
+
+    PrivateSubnet2CIDR:
+      Type: String
+      Default: 10.100.3.0/24
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The CIDR block for the private  subnet located in Availability Zone 2.
+
+    
+    LocalSubnet:
+      Type: String
+      Default: '10.100.0.0/16'
+      AllowedPattern: >-
+        ^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(\/([0-9]|[1-2][0-9]|3[0-2]))?$
+      ConstraintDescription: must be a valid CIDR block format.
+      Description: The Subnet CIDR behind OpenSwan
+
+    OpenSwanMasterPrivateIP:
+      Default: '10.100.0.8'
+      Type: String
+      Description: 'OpenSwan Master Private IP Address'
+
+    RemoteDataCenterServerIP:
+      Default: '13.114.8.208'
+      Type: String
+      Description: 'Remote IP Address'
+
+    RemoteDataCenterSubnet:
+      Default: '10.50.0.0/16'
+      Type: String
+      Description: 'The Subnet CIDR of  Remote'
+  
+    IPSecSharedSecret:
+      Default: 'psk123'
+      Description: 'The shared secret key for IPSec.'
+      Type: String
+  
+    IPSecIKE:
+      Default: 'aes256-sha1'
+      Description: 'The IKE Alogrisum.'
+      Type: String
+    IPSecIKEmodp:
+      Default: 'modp1024'
+      Description: 'The IKE Alogrisum modp'
+      Type: String
+    IPSecIKELifeTime:
+      Default: '86400s'
+      Description: 'The IKE LifeTime'
+      Type: String
+
+    IPSecPhaseII:
+      Default: 'esp'
+      Description: 'The IPSecPhaseII '
+      Type: String
+    IPSecPhaseIIAlg:
+      Default: 'aes256-sha1'
+      Description: 'The IPSecPhaseII '
+      Type: String
+    IPSECPhaseIImodp:
+      Default: 'modp1024'
+      Description: 'The IPSecPhaseII Alogrisum modp'
+      Type: String
+    IPSECSALifeTime:
+      Default: '3600s'
+      Description: 'The IPSecPhaseII SA LifeTime'
+      Type: String
+
+    OpenSwanInstanceType:
+      Default: t2.micro
+      AllowedValues:
+          - t2.micro
+          - t2.small
+          - t2.medium
+          - c5.large
+          - c5.xlarge
+          - c5.2xlarge
+      Description: "The instance type to use for the OpenSwan."
+      Type: String
+    KeypairName:
+      Type: 'AWS::EC2::KeyPair::KeyName'
+      ConstraintDescription: must specify an admin access key pair for openswan instances.
+      Description: Amazon EC2 Key Pair for admin access.
+
+Mappings:
+  RegionMap:
+    'cn-north-1':
+      AMI: 'ami-0dd06fbcbb6cf837f'
+    'cn-northwest-1':
+      AMI: 'ami-057a5918790ce5037'
+Resources:
+  OpenSwanVPC:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      Parameters:
+        AvailabilityZones: !Join 
+          - ','
+          - !Ref AvailabilityZones
+        VPCCIDR: !Ref VPCCIDR
+        PublicSubnet1CIDR: !Ref OpenSwanMasterSubnetCIDR
+        PublicSubnet2CIDR: !Ref OpenSwanSlaveSubnetCIDR 
+        PrivateSubnet1CIDR: !Ref PrivateSubnet1CIDR
+        PrivateSubnet2CIDR: !Ref PrivateSubnet2CIDR
+        CustomIdentifier: !Ref CustomIdentifier
+      TemplateURL: !Sub https://aws-industry-solutions-reference.s3.cn-north-1.amazonaws.com.cn/openswan-on-aws/v1.0.0/openswan-onpremvpc-china.yaml
+      TimeoutInMinutes: '10'
+
+  EC2OpenSwanOnPremRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2OpenSwanOnPremRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com.cn"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: OpenSwanOnPremPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:AssignPrivateIpAddresses'
+                  - 'ec2:DetachNetworkInterface'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:AttachNetworkInterface'
+                  - 'ec2:*'
+                  - 'ssm:*'
+                  - 'ssmmessages:*'
+                  - 'ec2messages:*'
+                  - 'sns:*'
+                Resource: '*'
+
+  EC2OpenSwanOnPremProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref EC2OpenSwanOnPremRole
+  EIP:
+    Type: AWS::EC2::EIP
+
+  EIPAssoc:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref EC2OpenSwanInstanceMaster
+      EIP: !Ref EIP
+  
+  OpenSwanInstanceSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'OpenSwan Security Group'
+      VpcId: !GetAtt 
+        - OpenSwanVPC
+        - Outputs.VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: udp
+        FromPort: 500
+        ToPort: 500
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: udp
+        FromPort: 4500
+        ToPort: 4500
+        CidrIp: '0.0.0.0/0'
+
+  EC2OpenSwanInstanceMaster:
+      Type: 'AWS::EC2::Instance'
+      DependsOn: 
+        - EIP 
+      Properties:
+        InstanceType: !Ref OpenSwanInstanceType
+        IamInstanceProfile: !Ref EC2OpenSwanOnPremProfile
+        SourceDestCheck: False
+        PrivateIpAddress: !Ref OpenSwanMasterPrivateIP
+        SecurityGroupIds:
+        - !Ref OpenSwanInstanceSecurityGroup
+        KeyName: !Ref KeypairName
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        SubnetId: !GetAtt 
+          - OpenSwanVPC 
+          - Outputs.PublicSubnet1
+        Tags:
+          - Key: "Name"
+            Value: "OpenSwanMaster"
+
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+
+            yum upgrade -y
+            yum install -y openswan keepalived
+
+            PUBLIC_IP=${EIP}
+
+            echo "net.ipv4.ip_forward = 1" |  tee -a /etc/sysctl.conf
+            echo "net.ipv4.conf.all.accept_redirects = 0" |  tee -a /etc/sysctl.conf
+            echo "net.ipv4.conf.all.send_redirects = 0" |  tee -a /etc/sysctl.conf
+            for vpn in /proc/sys/net/ipv4/conf/*; do echo 0 > $vpn/accept_redirects; echo 0 > $vpn/send_redirects; done
+            for i in /proc/sys/net/ipv4/conf/*;do echo 0 > $i/rp_filter;done
+            sysctl -p
+
+            cat > /etc/ipsec.d/ipsec.conf <<EOF
+            config setup
+                    dumpdir=/var/run/pluto/
+                    nat_traversal=yes
+                    virtual_private=%v4:10.0.0.0/8,%v4:192.168.0.0/16,%v4:172.16.0.0/12,%v4:25.0.0.0/8,%v6:fd00::/8,%v6:fe80::/10
+                    oe=off
+                    protostack=netkey
+                    nhelpers=0
+                    interfaces=%defaultroute
+            conn openswan
+                    authby=secret
+                    type=tunnel
+                    auto=start     
+
+                    left=${OpenSwanMasterPrivateIP}
+                    leftid=$PUBLIC_IP
+                    leftsubnet=${LocalSubnet}           
+                    leftnexthop=%defaultroute
+
+                    right=${RemoteDataCenterServerIP}                   
+                    rightsubnet=${RemoteDataCenterSubnet} 
+                    rightnexthop=%defaultroute
+
+                    ike=${IPSecIKE};${IPSecIKEmodp}
+                    ikelifetime=${IPSecIKELifeTime}
+                    phase2=${IPSecPhaseII}
+                    phase2alg=${IPSecPhaseIIAlg};${IPSECPhaseIImodp}
+                    salifetime=${IPSECSALifeTime}
+                    pfs=yes
+
+
+            EOF
+
+            
+            cat > /etc/ipsec.d/ipsec.secrets <<EOF
+            $PUBLIC_IP  ${RemoteDataCenterServerIP} : PSK "${IPSecSharedSecret}"
+            EOF
+            
+
+            iptables -t nat -A POSTROUTING -j MASQUERADE
+            echo 1 > /proc/sys/net/ipv4/ip_forward
+            iptables-save > /etc/iptables.rules
+
+            mkdir -p /etc/network/if-pre-up.d
+            cat > /etc/network/if-pre-up.d/iptablesload <<EOF
+            #!/bin/sh
+            iptables-restore < /etc/iptables.rules
+            echo 1 > /proc/sys/net/ipv4/ip_forward
+            exit 0
+            EOF
+
+            service ipsec start
+            chkconfig ipsec on
+            ipsec status
+
+            
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2OpenSwanInstanceMaster  --region ${AWS::Region}
+  
+      CreationPolicy:
+        ResourceSignal:
+          Count: 1
+          Timeout: PT20M
+
+Outputs:
+  EC2OpenSwanMasterInstanceEIP:
+    Description: 'Public IP address of the vpn server'
+    Value: !Ref EIP
+  EC2OpenSwanMasterInstancePrivateIP:
+    Description: 'Private IP address of the vpn server'
+    Value: !GetAtt 'EC2OpenSwanInstanceMaster.PrivateIp'
+
+  IPSecSharedSecret:
+    Description: 'The shared key for the VPN connection (IPSec)'
+    Value: !Ref IPSecSharedSecret
